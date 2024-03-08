@@ -1,0 +1,192 @@
+int infraPins[] = {1,2,4,5,6};
+int pwmPins[] = {11,3};
+int brakePins[] = {9,8};
+int dirPins[] = {12,13};
+
+int stopPattern[] = {0,0,0,0,0};
+int forwardPattern[] = {1,1,0,1,1};
+int deadEndPattern[] = {1,1,1,1,1};
+int leftPattern[] = {0,0,0,1,1};
+int softLeftPattern[] {1,0,0,1,1};
+int rightPattern[] = {1,1,0,0,0};
+int softRightPattern[] {1,1,0,0,1};
+
+bool forward = true;
+bool isDriving = false;
+bool steerLeft = false;
+int leftCount = 0;
+bool steerRight = false;
+int rightCount  = 0;
+int speed = 35;
+int turnSpeed = 35;
+
+void setup() {
+  TCCR2B = TCCR2B & B11111000 | B00000111; // for PWM frequency of 122.55 Hz
+
+  for(int dirPin : dirPins)
+    pinMode(dirPin, OUTPUT);
+  for(int pwmPin : pwmPins)
+    pinMode(pwmPin, OUTPUT);
+  for(int brakePin : brakePins)
+    pinMode(brakePin, OUTPUT);
+
+    Serial.begin(9600);
+}
+void loop() {
+  UpdateState();
+  SetDirection();
+  UpdateDriving();
+}
+
+void UpdateState() {
+
+  bool rotateAround = true;
+  bool leftFound = true;
+  bool rightFound = true;
+  bool softLeftFound = true;
+  bool softRightFound = true;
+
+  for(int i = 0; i < 5; i++) {
+    if(digitalRead(infraPins[i]) != stopPattern[i])
+      isDriving = true;
+    if(digitalRead(infraPins[i]) != deadEndPattern[i])
+      rotateAround = false;
+    if(digitalRead(infraPins[i]) != leftPattern[i])
+      leftFound = false;
+    if(digitalRead(infraPins[i]) != rightPattern[i])
+      rightFound = false;
+    if(digitalRead(infraPins[i]) != softLeftPattern[i])
+      softLeftFound = false;
+    if(digitalRead(infraPins[i]) != softRightPattern[i])
+      softRightFound = false;
+  }
+
+  if(rotateAround)
+    RotateBack();
+  if(softLeftFound)
+    SoftLeft();
+  if(softRightFound)
+    SoftRight();
+  if(leftFound)
+    steerLeft = true;
+  if(rightFound)
+    steerRight = true;
+
+}
+
+void UpdateDriving() {
+  if(isDriving)  {
+    if(steerLeft) {
+      delay(50);
+      UpdateState();
+      if(!steerLeft) {
+        SteerRight();
+        return;
+      }
+
+      SteerLeft();
+    } else if(steerRight) {
+      delay(50);
+      UpdateState();
+
+      SteerRight();
+    } else {
+      analogWrite(pwmPins[0], speed);
+      analogWrite(pwmPins[1], speed);
+      digitalWrite(brakePins[0], LOW);
+      digitalWrite(brakePins[1], LOW);
+      digitalWrite(dirPins[0], LOW);
+      digitalWrite(dirPins[1], LOW);
+    }
+  }
+  if(!isDriving) {
+    analogWrite(pwmPins[0], 0);
+    analogWrite(pwmPins[1], 0);
+    digitalWrite(brakePins[0], HIGH);
+    digitalWrite(brakePins[1], HIGH);
+  }
+}
+
+void SteerLeft() {
+  analogWrite(pwmPins[0], 0);
+  analogWrite(pwmPins[1], turnSpeed);
+  digitalWrite(brakePins[0], HIGH);
+  digitalWrite(brakePins[1], LOW);
+
+  bool keepSteering = true;
+  while(keepSteering) {
+    keepSteering = false;
+    for(int i = 0; i < 5; i++) {
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        keepSteering = true;
+    }
+  }
+  steerLeft = false;
+}
+void SoftLeft() {
+  analogWrite(pwmPins[0], turnSpeed * 0.4);
+  analogWrite(pwmPins[1], turnSpeed);
+
+  bool keepSteering = true;
+  while(keepSteering) {
+    keepSteering = false;
+    for(int i = 0; i < 5; i++) {
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        keepSteering = true;
+    }
+  }
+}
+void SteerRight() {
+  analogWrite(pwmPins[0], turnSpeed);
+      analogWrite(pwmPins[1], 0);
+      digitalWrite(brakePins[0], LOW);
+      digitalWrite(brakePins[1], HIGH);
+
+      bool keepSteering = true;
+      while(keepSteering) {
+        keepSteering = false;
+        for(int i = 0; i < 5; i++) {
+          if(digitalRead(infraPins[i]) != forwardPattern[i])
+            keepSteering = true;
+        }
+      }
+      steerRight = false;
+}
+void SoftRight() {
+  analogWrite(pwmPins[0], turnSpeed);
+  analogWrite(pwmPins[1], turnSpeed * 0.4);
+
+  bool keepSteering = true;
+  while(keepSteering) {
+    keepSteering = false;
+    for(int i = 0; i < 5; i++) {
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        keepSteering = true;
+    }
+  }
+}
+
+void RotateBack() {
+  analogWrite(pwmPins[0], turnSpeed);
+  analogWrite(pwmPins[1], turnSpeed);
+  digitalWrite(dirPins[1], HIGH);
+
+  bool keepSteering = true;
+  while(keepSteering) {
+    keepSteering = false;
+    for(int i = 0; i < 5; i++) {
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        keepSteering = true;
+    }
+  }
+  digitalWrite(dirPins[1], LOW);
+}
+
+void SetDirection() {
+  for(int dirPin : dirPins) {
+    if(!forward)
+      digitalWrite(dirPin, HIGH);
+    if(forward)
+      digitalWrite(dirPin, LOW);
+  }
+}
