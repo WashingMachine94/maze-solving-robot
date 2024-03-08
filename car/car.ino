@@ -88,15 +88,12 @@ void UpdateDriving() {
     } else if(steerRight) {
       delay(50);
       UpdateState();
-
       SteerRight();
     } else {
       analogWrite(pwmPins[0], speed);
       analogWrite(pwmPins[1], speed);
       digitalWrite(brakePins[0], LOW);
       digitalWrite(brakePins[1], LOW);
-      digitalWrite(dirPins[0], LOW);
-      digitalWrite(dirPins[1], LOW);
     }
   }
   if(!isDriving) {
@@ -130,27 +127,35 @@ void SoftLeft() {
   bool keepSteering = true;
   while(keepSteering) {
     keepSteering = false;
+    bool left = true;
+
     for(int i = 0; i < 5; i++) {
       if(digitalRead(infraPins[i]) != forwardPattern[i])
         keepSteering = true;
+      if(digitalRead(infraPins[i]) != leftPattern[i])
+        left = false;
+    }
+    if(left) {
+      SteerLeft();
+      return;
     }
   }
 }
 void SteerRight() {
   analogWrite(pwmPins[0], turnSpeed);
-      analogWrite(pwmPins[1], 0);
-      digitalWrite(brakePins[0], LOW);
-      digitalWrite(brakePins[1], HIGH);
+  analogWrite(pwmPins[1], 0);
+  digitalWrite(brakePins[0], LOW);
+  digitalWrite(brakePins[1], HIGH);
 
-      bool keepSteering = true;
-      while(keepSteering) {
-        keepSteering = false;
-        for(int i = 0; i < 5; i++) {
-          if(digitalRead(infraPins[i]) != forwardPattern[i])
-            keepSteering = true;
-        }
-      }
-      steerRight = false;
+  bool keepSteering = true;
+  while(keepSteering) {
+    keepSteering = false;
+    for(int i = 0; i < 5; i++) {
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        keepSteering = true;
+    }
+  }
+  steerRight = false;
 }
 void SoftRight() {
   analogWrite(pwmPins[0], turnSpeed);
@@ -159,9 +164,17 @@ void SoftRight() {
   bool keepSteering = true;
   while(keepSteering) {
     keepSteering = false;
+    bool right = true;
     for(int i = 0; i < 5; i++) {
       if(digitalRead(infraPins[i]) != forwardPattern[i])
         keepSteering = true;
+      if(digitalRead(infraPins[i]) != rightPattern[i])
+        right = false;
+    }
+
+    if(right) {
+      SteerRight();
+      return;
     }
   }
 }
