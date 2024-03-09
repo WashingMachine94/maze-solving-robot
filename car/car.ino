@@ -11,6 +11,8 @@ int softLeftPattern[] {1,0,0,1,1};
 int rightPattern[] = {1,1,0,0,0};
 int softRightPattern[] {1,1,0,0,1};
 
+bool favorLeft = false;
+
 bool forward = true;
 bool isDriving = false;
 bool steerLeft = false;
@@ -41,8 +43,10 @@ void loop() {
 void UpdateState() {
 
   bool rotateAround = true;
-  bool leftFound = true;
-  bool rightFound = true;
+
+  bool leftFound = favorLeft;
+  
+  bool rightFound = !favorLeft;
   bool softLeftFound = true;
   bool softRightFound = true;
 
@@ -136,8 +140,11 @@ void SoftLeft() {
         left = false;
     }
     if(left) {
-      SteerLeft();
-      return;
+      if(favorLeft) {
+        SteerLeft();
+        return;
+      }
+      keepSteering = false;
     }
   }
 }
@@ -173,13 +180,17 @@ void SoftRight() {
     }
 
     if(right) {
-      SteerRight();
-      return;
+      if(!favorLeft) {
+        SteerRight();
+        return;
+      }
+      keepSteering = false;
     }
   }
 }
 
 void RotateBack() {
+  delay(200);
   analogWrite(pwmPins[0], turnSpeed);
   analogWrite(pwmPins[1], turnSpeed);
   digitalWrite(dirPins[1], HIGH);
