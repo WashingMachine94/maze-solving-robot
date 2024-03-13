@@ -11,19 +11,16 @@ int softLeftPattern[] {1,0,0,1,1};
 int rightPattern[] = {1,1,0,0,0};
 int softRightPattern[] {1,1,0,0,1};
 
-bool favorLeft = true;
+const bool favorLeft = true;
 
 bool forward = true;
 bool isDriving = false;
-bool steerLeft = false;
-int leftCount = 0;
-bool steerRight = false;
-int rightCount  = 0;
 
 //int speed = 35;
 //int turnSpeed = 35;
-int speed = 45;
-int turnSpeed = 45;
+const int speed = 45;
+const int turnSpeed = 45;
+const float turnSpeedMultiplier = 0.6;
 
 void setup() {
   //TCCR2B = TCCR2B & B11111000 | B00000110
@@ -41,25 +38,24 @@ void setup() {
 void loop() {
   UpdateState();
   SetDirection();
-  UpdateDriving();
 }
 
 int UpdateState() {
-
   bool rotateAround = true;
+  bool leftFound = true;
+  bool rightFound = true;
 
-  bool leftFound = favorLeft;
-  
-  bool rightFound = !favorLeft;
   bool stopFound = true;
+  bool forward = true;
+
   bool softLeftFound = true;
   bool softRightFound = true;
 
   for(int i = 0; i < 5; i++) {
-    if(digitalRead(infraPins[i]) != stopPattern[i]) {
-      isDriving = true;
+    if(digitalRead(infraPins[i]) != forwardPattern[i])
+      forward = false;
+    if(digitalRead(infraPins[i]) != stopPattern[i])
       stopFound = false;
-    }
     if(digitalRead(infraPins[i]) != deadEndPattern[i])
       rotateAround = false;
     if(digitalRead(infraPins[i]) != leftPattern[i])
@@ -72,6 +68,8 @@ int UpdateState() {
       softRightFound = false;
   }
 
+  if(forward)
+    Drive();
   if(rotateAround)
     RotateBack();
   if(softLeftFound)
@@ -79,56 +77,25 @@ int UpdateState() {
   if(softRightFound)
     SoftRight();
   if(leftFound)
-    steerLeft = true;
+    SteerLeft();
   if(rightFound)
-    steerRight = true;
+    SteerRight();
   if(stopFound)
-    return 1;
+    TestEnd();
   return 0;
 }
-
-void UpdateDriving() {
-  if(isDriving)  {
-    if(steerLeft) {
-      delay(50);
-      UpdateState();
-      if(!steerLeft) {
-        if(favorLeft) {
-          SteerLeft();
-        } else {
-          SteerRight();
-        }
-        return;
-      }
-
-      SteerLeft();
-    } else if(steerRight) {
-      delay(50);
-      UpdateState();
-      if(!steerRight) {
-        if(favorLeft) {
-          SteerLeft();
-        } else {
-          SteerRight();
-        }
-        return;
-      }
-      SteerRight();
-    } else {
-      analogWrite(pwmPins[0], speed);
-      analogWrite(pwmPins[1], speed);
-      digitalWrite(brakePins[0], LOW);
-      digitalWrite(brakePins[1], LOW);
-    }
-  }
-  if(!isDriving) {
-    analogWrite(pwmPins[0], 0);
-    analogWrite(pwmPins[1], 0);
-    digitalWrite(brakePins[0], HIGH);
-    digitalWrite(brakePins[1], HIGH);
-  }
+void Drive() {
+  analogWrite(pwmPins[0], speed);
+  analogWrite(pwmPins[1], speed);
+  digitalWrite(brakePins[0], LOW);
+  digitalWrite(brakePins[1], LOW);
 }
-
+void Stop() {
+  analogWrite(pwmPins[0], 0);
+  analogWrite(pwmPins[1], 0);
+  digitalWrite(brakePins[0], HIGH);
+  digitalWrite(brakePins[1], HIGH);
+}
 void SteerLeft() {
   analogWrite(pwmPins[0], 0);
   analogWrite(pwmPins[1], turnSpeed);
@@ -138,34 +105,38 @@ void SteerLeft() {
   bool keepSteering = true;
   while(keepSteering) {
     keepSteering = false;
+    bool stop = true;
+
     for(int i = 0; i < 5; i++) {
       if(digitalRead(infraPins[i]) != forwardPattern[i])
         keepSteering = true;
+      if(digitalRead(infraPins[i]) != stopPattern[i])
+        stop = false;
+    }
+
+    if(stop) {
+      TestEnd();
+      return;
     }
   }
-  steerLeft = false;
 }
 void SoftLeft() {
-  analogWrite(pwmPins[0], turnSpeed * 0.6);
+  analogWrite(pwmPins[0], turnSpeed * turnSpeedMultiplier);
   analogWrite(pwmPins[1], turnSpeed);
+}
+void AbsoluteLeft() {
+  analogWrite(pwmPins[0], 0);
+  analogWrite(pwmPins[1], turnSpeed);
+  digitalWrite(brakePins[0], HIGH);
+  digitalWrite(brakePins[1], LOW);
 
   bool keepSteering = true;
   while(keepSteering) {
     keepSteering = false;
-    bool left = true;
 
     for(int i = 0; i < 5; i++) {
       if(digitalRead(infraPins[i]) != forwardPattern[i])
         keepSteering = true;
-      if(digitalRead(infraPins[i]) != leftPattern[i])
-        left = false;
-    }
-    if(left) {
-      if(favorLeft) {
-        SteerLeft();
-        return;
-      }
-      keepSteering = false;
     }
   }
 }
@@ -178,50 +149,63 @@ void SteerRight() {
   bool keepSteering = true;
   while(keepSteering) {
     keepSteering = false;
+    bool stop = true;
+
     for(int i = 0; i < 5; i++) {
       if(digitalRead(infraPins[i]) != forwardPattern[i])
         keepSteering = true;
+      if(digitalRead(infraPins[i]) != stopPattern[i])
+        stop = false;
+    }
+
+    if(stop) {
+      TestEnd();
+      return;
     }
   }
-  steerRight = false;
 }
 void SoftRight() {
   analogWrite(pwmPins[0], turnSpeed);
-  analogWrite(pwmPins[1], turnSpeed * 0.6);
+  analogWrite(pwmPins[1], turnSpeed * turnSpeedMultiplier);
+}
+void AbsoluteRight() {
+  analogWrite(pwmPins[0], turnSpeed);
+  analogWrite(pwmPins[1], 0);
+  digitalWrite(brakePins[0], LOW);
+  digitalWrite(brakePins[1], HIGH);
 
   bool keepSteering = true;
   while(keepSteering) {
     keepSteering = false;
-    bool right = true;
+    bool stop = true;
+
     for(int i = 0; i < 5; i++) {
       if(digitalRead(infraPins[i]) != forwardPattern[i])
         keepSteering = true;
-      if(digitalRead(infraPins[i]) != rightPattern[i])
-        right = false;
-    }
-
-    if(right) {
-      if(!favorLeft) {
-        SteerRight();
-        return;
-      }
-      keepSteering = false;
     }
   }
 }
 
 void TestEnd() {
-  if(UpdateState() != 1) return;
-  analogWrite(pwmPins[0], speed);
-  analogWrite(pwmPins[1], speed);
-  digitalWrite(brakePins[0], LOW);
-  digitalWrite(brakePins[1], LOW);
+  bool stopFound = true;
+  Drive();
   delay(400);
-  if(UpdateState() != 1) {
+
+  for(int i=0; i < 5; i++)
+    if(digitalRead(infraPins[i]) != stopPattern[i])
+      stopFound = false;
+
+  if(!stopFound) {
+    forward = false;
+    SetDirection();
+    delay(750);
+    forward = true;
+    SetDirection();
+
     if(favorLeft) {
-      SteerLeft();
+      AbsoluteLeft();
     } else {
-      SteerRight();
+      AbsoluteRight();
     }
     return;
   }
@@ -231,8 +215,16 @@ void TestEnd() {
   digitalWrite(brakePins[0], HIGH);
   digitalWrite(brakePins[1], HIGH);
 
-  while(true) {}
-
+  bool stopped = true;
+  while(stopped) {
+    bool temp = true;
+    for(int i=0; i < 5; i++)
+      if(digitalRead(infraPins[i]) != stopPattern[i])
+        temp = false;
+    
+    if(!temp)
+      stopped = false;
+  }
 }
 void RotateBack() {
   delay(200);
