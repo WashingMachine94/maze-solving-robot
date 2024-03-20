@@ -1,6 +1,5 @@
 int infraPins[] = {1,2,4,5,6};
 int pwmPins[] = {11,3};
-int brakePins[] = {9,8};
 int dirPins[] = {12,13};
 
 int stopPattern[] = {0,0,0,0,0};
@@ -18,12 +17,14 @@ bool isDriving = false;
 //int turnSpeed = 35;
 const int speed = 45;
 const int turnSpeed = 45;
+const int leftSpeed = 48;
+const int rightSpeed = 45;
 
 const bool favorLeft = true;
 
 const int steerDelay = 300;
 const int forwardsDelay = 400;
-const int backwardsDelay = 700;
+const int backwardsDelay = 650;
 const int retryDuration = 40;
 
 const float turnSpeedMultiplier = 0.6;
@@ -36,8 +37,6 @@ void setup() {
     pinMode(dirPin, OUTPUT);
   for(int pwmPin : pwmPins)
     pinMode(pwmPin, OUTPUT);
-  for(int brakePin : brakePins)
-    pinMode(brakePin, OUTPUT);
 
     Serial.begin(9600);
 }
@@ -93,14 +92,54 @@ int UpdateState() {
 void Drive() {
   analogWrite(pwmPins[0], speed);
   analogWrite(pwmPins[1], speed);
-  digitalWrite(brakePins[0], LOW);
-  digitalWrite(brakePins[1], LOW);
 }
 void Stop() {
   analogWrite(pwmPins[0], 0);
   analogWrite(pwmPins[1], 0);
-  digitalWrite(brakePins[0], HIGH);
-  digitalWrite(brakePins[1], HIGH);
+}
+void TurnUntilForward() {
+  // turn until forward pattern is broken
+  bool keepSteering = true;
+  while(keepSteering) {
+    keepSteering = true;
+
+    for(int i = 0; i < 5; i++)
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        keepSteering = false;
+  }
+  delay(5);
+  while(keepSteering) {
+    keepSteering = true;
+
+    for(int i = 0; i < 5; i++)
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        keepSteering = false;
+  }
+
+  // turn until new forward pattern is found
+  keepSteering = true;
+  while(keepSteering) {
+    keepSteering = false;
+
+    for(int i = 0; i < 5; i++)
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        keepSteering = true;
+  }
+}
+void ReverseUntilForward() {
+  forward = false;
+  SetDirection();
+  bool goBackwards = true;
+  while(goBackwards) {
+    goBackwards = false;
+    for(int i=0; i < 5; i++)
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        goBackwards = true;
+  }
+  
+  forward = true;
+  SetDirection();
+  delay(retryDuration);
 }
 void SteerLeft() {
   delay(retryDuration);
@@ -128,32 +167,13 @@ void SteerLeft() {
 
     if(forwardFound)
       return;
-    if(deadEndFound) {
-      forward = false;
-      SetDirection();
-      delay(backwardsDelay);
-      forward = true;
-      SetDirection();
-    }
+    if(deadEndFound)
+      ReverseUntilForward();
   }
   analogWrite(pwmPins[0], 0);
   analogWrite(pwmPins[1], turnSpeed);
-  digitalWrite(brakePins[0], HIGH);
-  digitalWrite(brakePins[1], LOW);
 
-  if(!favorLeft)
-    delay(steerDelay);
-
-  bool keepSteering = true;
-  while(keepSteering) {
-    keepSteering = false;
-    bool stop = true;
-
-    for(int i = 0; i < 5; i++) {
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        keepSteering = true;
-    }
-  }
+  TurnUntilForward();
 }
 void SoftLeft() {
   analogWrite(pwmPins[0], turnSpeed * turnSpeedMultiplier);
@@ -162,19 +182,7 @@ void SoftLeft() {
 void AbsoluteLeft() {
   analogWrite(pwmPins[0], 0);
   analogWrite(pwmPins[1], turnSpeed);
-  digitalWrite(brakePins[0], HIGH);
-  digitalWrite(brakePins[1], LOW);
-
-  delay(steerDelay);
-
-  bool keepSteering = true;
-  while(keepSteering) {
-    keepSteering = false;
-
-    for(int i = 0; i < 5; i++)
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        keepSteering = true;
-  }
+  TurnUntilForward();
 }
 void SteerRight() {
   delay(retryDuration);
@@ -202,32 +210,13 @@ void SteerRight() {
 
     if(forwardFound)
       return;
-    if(deadEndFound) {
-      forward = false;
-      SetDirection();
-      delay(backwardsDelay);
-      forward = true;
-      SetDirection();
-    }
+    if(deadEndFound)
+      ReverseUntilForward();
   }
   analogWrite(pwmPins[0], turnSpeed);
   analogWrite(pwmPins[1], 0);
-  digitalWrite(brakePins[0], LOW);
-  digitalWrite(brakePins[1], HIGH);
 
-  if(favorLeft)
-    delay(steerDelay);
-
-  bool keepSteering = true;
-  while(keepSteering) {
-    keepSteering = false;
-    bool stop = true;
-
-    for(int i = 0; i < 5; i++) {
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        keepSteering = true;
-    }
-  }
+  TurnUntilForward();
 }
 void SoftRight() {
   analogWrite(pwmPins[0], turnSpeed);
@@ -236,20 +225,7 @@ void SoftRight() {
 void AbsoluteRight() {
   analogWrite(pwmPins[0], turnSpeed);
   analogWrite(pwmPins[1], 0);
-  digitalWrite(brakePins[0], LOW);
-  digitalWrite(brakePins[1], HIGH);
-
-  delay(steerDelay);
-
-  bool keepSteering = true;
-  while(keepSteering) {
-    keepSteering = false;
-    bool stop = true;
-
-    for(int i = 0; i < 5; i++)
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        keepSteering = true;
-  }
+  TurnUntilForward();
 }
 
 void TestEnd() {
@@ -262,13 +238,10 @@ void TestEnd() {
       stopFound = false;
 
   if(!stopFound) {
-    forward = false;
-    SetDirection();
-    delay(backwardsDelay);
-    forward = true;
-    SetDirection();
-
+    ReverseUntilForward();
+    
     if(favorLeft) {
+      delay(50);
       AbsoluteLeft();
     } else {
       AbsoluteRight();
@@ -278,8 +251,6 @@ void TestEnd() {
 
   analogWrite(pwmPins[0], 0);
   analogWrite(pwmPins[1], 0);
-  digitalWrite(brakePins[0], HIGH);
-  digitalWrite(brakePins[1], HIGH);
 
   bool stopped = true;
   while(stopped) {
