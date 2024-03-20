@@ -11,20 +11,14 @@ int rightPattern[] = {1,1,0,0,0};
 int softRightPattern[] {1,1,0,0,1};
 
 bool forward = true;
-bool isDriving = false;
 
-//int speed = 35;
-//int turnSpeed = 35;
 const int speed = 45;
 const int turnSpeed = 45;
-const int leftSpeed = 48;
-const int rightSpeed = 45;
+const int reverseSpeed = 35;
 
 const bool favorLeft = true;
 
-const int steerDelay = 300;
-const int forwardsDelay = 400;
-const int backwardsDelay = 650;
+const int forwardsDelay = 300;
 const int retryDuration = 40;
 
 const float turnSpeedMultiplier = 0.6;
@@ -127,14 +121,18 @@ void TurnUntilForward() {
   }
 }
 void ReverseUntilForward() {
+  analogWrite(pwmPins[0], reverseSpeed);
+  analogWrite(pwmPins[1], reverseSpeed);
   forward = false;
   SetDirection();
-  bool goBackwards = true;
-  while(goBackwards) {
-    goBackwards = false;
-    for(int i=0; i < 5; i++)
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        goBackwards = true;
+  for(int i=0; i < 2; i++) {
+    bool goBackwards = true;
+    while(goBackwards) {
+      goBackwards = false;
+      for(int i=0; i < 5; i++)
+        if(digitalRead(infraPins[i]) != forwardPattern[i])
+          goBackwards = true;
+    }
   }
   
   forward = true;
@@ -231,6 +229,7 @@ void AbsoluteRight() {
 void TestEnd() {
   bool stopFound = true;
   Drive();
+
   delay(forwardsDelay);
 
   for(int i=0; i < 5; i++)
@@ -241,7 +240,7 @@ void TestEnd() {
     ReverseUntilForward();
     
     if(favorLeft) {
-      delay(50);
+      delay(30);
       AbsoluteLeft();
     } else {
       AbsoluteRight();
@@ -272,10 +271,9 @@ void RotateBack() {
   bool keepSteering = true;
   while(keepSteering) {
     keepSteering = false;
-    for(int i = 0; i < 5; i++) {
+    for(int i = 0; i < 5; i++)
       if(digitalRead(infraPins[i]) != forwardPattern[i])
         keepSteering = true;
-    }
   }
   digitalWrite(dirPins[1], LOW);
 }
