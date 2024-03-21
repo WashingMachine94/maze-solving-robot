@@ -12,9 +12,9 @@ int softRightPattern[] {1,1,0,0,1};
 
 bool forward = true;
 
-const int speed = 45;
-const int turnSpeed = 45;
-const int reverseSpeed = 35;
+const int speed = 50;
+const int turnSpeed = 50;
+const int reverseSpeed = 50;
 
 const bool favorLeft = true;
 
@@ -24,19 +24,16 @@ const int retryDuration = 40;
 const float turnSpeedMultiplier = 0.6;
 
 void setup() {
-  //TCCR2B = TCCR2B & B11111000 | B00000110
-  TCCR2B = TCCR2B & B11111000 | B00000111; // for PWM frequency of 122.55 Hz
+  TCCR2B = TCCR2B & B11111000 | B00000111;
 
   for(int dirPin : dirPins)
     pinMode(dirPin, OUTPUT);
   for(int pwmPin : pwmPins)
     pinMode(pwmPin, OUTPUT);
-
-    Serial.begin(9600);
 }
 void loop() {
-  UpdateState();
   SetDirection();
+  UpdateState();
 }
 
 int UpdateState() {
@@ -120,12 +117,28 @@ void TurnUntilForward() {
         keepSteering = true;
   }
 }
+void WaitUntilForward() {
+  // wait until forward pattern is found
+  bool keepWaiting = true;
+  while(keepWaiting) {
+    keepWaiting = false;
+
+    for(int i = 0; i < 5; i++)
+      if(digitalRead(infraPins[i]) != forwardPattern[i])
+        keepWaiting = true;
+  }
+}
 void ReverseUntilForward() {
-  analogWrite(pwmPins[0], reverseSpeed);
-  analogWrite(pwmPins[1], reverseSpeed);
+  analogWrite(pwmPins[0], 0);
+  analogWrite(pwmPins[1], 0);
+  delay(10);
   forward = false;
   SetDirection();
-  for(int i=0; i < 2; i++) {
+  delay(10);
+  analogWrite(pwmPins[0], reverseSpeed);
+  analogWrite(pwmPins[1], reverseSpeed);
+
+  for(int i=0; i < 10; i++) {
     bool goBackwards = true;
     while(goBackwards) {
       goBackwards = false;
@@ -133,11 +146,30 @@ void ReverseUntilForward() {
         if(digitalRead(infraPins[i]) != forwardPattern[i])
           goBackwards = true;
     }
+    delay(3);
   }
   
   forward = true;
   SetDirection();
   delay(retryDuration);
+}
+void SteerLeftInPlace() {
+  digitalWrite(dirPins[0], LOW);
+  digitalWrite(dirPins[1], HIGH);
+  analogWrite(pwmPins[0], turnSpeed);
+  analogWrite(pwmPins[1], turnSpeed);
+  WaitUntilForward();
+  forward = true;
+  SetDirection();
+}
+void SteerRightInPlace() {
+  digitalWrite(dirPins[0], HIGH);
+  digitalWrite(dirPins[1], LOW);
+  analogWrite(pwmPins[0], turnSpeed);
+  analogWrite(pwmPins[1], turnSpeed);
+  WaitUntilForward();
+  forward = true;
+  SetDirection();
 }
 void SteerLeft() {
   delay(retryDuration);
@@ -146,8 +178,16 @@ void SteerLeft() {
     if(digitalRead(infraPins[i]) != leftPattern[i])
       patternPersisted = false;
 
-  if(!patternPersisted)
+  if(!patternPersisted) {
+    bool stopFound = true;
+    for(int i=0; i<5; i++)
+      if(digitalRead(infraPins[i]) != stopPattern[i])
+        stopFound = false;
+
+    if(stopFound)
+      TestEnd();
     return;
+  }
 
   if(!favorLeft) {
     // TEST IF THERE'S FORWARD
@@ -162,11 +202,10 @@ void SteerLeft() {
       if(digitalRead(infraPins[i]) != deadEndPattern[i])
         deadEndFound = false;
     }
-
     if(forwardFound)
       return;
-    if(deadEndFound)
-      ReverseUntilForward();
+    SteerLeftInPlace();
+    return;
   }
   analogWrite(pwmPins[0], 0);
   analogWrite(pwmPins[1], turnSpeed);
@@ -189,8 +228,16 @@ void SteerRight() {
     if(digitalRead(infraPins[i]) != rightPattern[i])
       patternPersisted = false;
 
-  if(!patternPersisted)
+  if(!patternPersisted) {
+    bool stopFound = true;
+    for(int i=0; i<5; i++)
+      if(digitalRead(infraPins[i]) != stopPattern[i])
+        stopFound = false;
+
+    if(stopFound)
+      TestEnd();
     return;
+  }
 
   if(favorLeft) {
     // TEST IF THERE'S FORWARD
@@ -208,8 +255,8 @@ void SteerRight() {
 
     if(forwardFound)
       return;
-    if(deadEndFound)
-      ReverseUntilForward();
+    SteerRightInPlace();
+    return;
   }
   analogWrite(pwmPins[0], turnSpeed);
   analogWrite(pwmPins[1], 0);
@@ -237,13 +284,15 @@ void TestEnd() {
       stopFound = false;
 
   if(!stopFound) {
-    ReverseUntilForward();
+    //ReverseUntilForward();
     
     if(favorLeft) {
-      delay(30);
-      AbsoluteLeft();
+      //delay(30);
+      //AbsoluteLeft();
+      SteerLeftInPlace();
     } else {
-      AbsoluteRight();
+      //AbsoluteRight();
+      SteerRightInPlace();
     }
     return;
   }
