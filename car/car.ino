@@ -128,31 +128,6 @@ void WaitUntilForward() {
         keepWaiting = true;
   }
 }
-void ReverseUntilForward() {
-  analogWrite(pwmPins[0], 0);
-  analogWrite(pwmPins[1], 0);
-  delay(10);
-  forward = false;
-  SetDirection();
-  delay(10);
-  analogWrite(pwmPins[0], reverseSpeed);
-  analogWrite(pwmPins[1], reverseSpeed);
-
-  for(int i=0; i < 10; i++) {
-    bool goBackwards = true;
-    while(goBackwards) {
-      goBackwards = false;
-      for(int i=0; i < 5; i++)
-        if(digitalRead(infraPins[i]) != forwardPattern[i])
-          goBackwards = true;
-    }
-    delay(3);
-  }
-  
-  forward = true;
-  SetDirection();
-  delay(retryDuration);
-}
 void SteerLeftInPlace() {
   digitalWrite(dirPins[0], LOW);
   digitalWrite(dirPins[1], HIGH);
@@ -216,11 +191,6 @@ void SoftLeft() {
   analogWrite(pwmPins[0], turnSpeed * turnSpeedMultiplier);
   analogWrite(pwmPins[1], turnSpeed);
 }
-void AbsoluteLeft() {
-  analogWrite(pwmPins[0], 0);
-  analogWrite(pwmPins[1], turnSpeed);
-  TurnUntilForward();
-}
 void SteerRight() {
   delay(retryDuration);
   bool patternPersisted = true;
@@ -267,39 +237,26 @@ void SoftRight() {
   analogWrite(pwmPins[0], turnSpeed);
   analogWrite(pwmPins[1], turnSpeed * turnSpeedMultiplier);
 }
-void AbsoluteRight() {
-  analogWrite(pwmPins[0], turnSpeed);
-  analogWrite(pwmPins[1], 0);
-  TurnUntilForward();
-}
 
 void TestEnd() {
-  bool stopFound = true;
   Drive();
-
   delay(forwardsDelay);
 
+  bool stopFound = true;
   for(int i=0; i < 5; i++)
     if(digitalRead(infraPins[i]) != stopPattern[i])
       stopFound = false;
 
   if(!stopFound) {
-    //ReverseUntilForward();
-    
-    if(favorLeft) {
-      //delay(30);
-      //AbsoluteLeft();
+    if(favorLeft)
       SteerLeftInPlace();
-    } else {
-      //AbsoluteRight();
+    if(!favorLeft)
       SteerRightInPlace();
-    }
     return;
   }
 
-  analogWrite(pwmPins[0], 0);
-  analogWrite(pwmPins[1], 0);
-
+  // stop until pattern breaks
+  Stop();
   bool stopped = true;
   while(stopped) {
     bool temp = true;
