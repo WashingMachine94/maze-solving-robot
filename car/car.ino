@@ -2,21 +2,34 @@ int infraPins[] = {1,2,4,5,6};
 int pwmPins[] = {11,3};
 int dirPins[] = {12,13};
 
-int stopPattern[] = {0,0,0,0,0};
-int forwardPattern[] = {1,1,0,1,1};
-int deadEndPattern[] = {1,1,1,1,1};
-int leftPattern[] = {0,0,0,1,1};
-int softLeftPattern[] {1,0,0,1,1};
-int rightPattern[] = {1,1,0,0,0};
-int softRightPattern[] {1,1,0,0,1};
+const int patterns[][5] = {
+  {0, 0, 0, 0, 0},   // Stop
+  {1, 1, 0, 1, 1},   // Forward
+  {1, 1, 1, 1, 1},   // Dead end
+  {0, 0, 0, 1, 1},   // Left
+  {1, 0, 0, 1, 1},   // Soft Left
+  {1, 1, 0, 0, 0},   // Right
+  {1, 1, 0, 0, 1}    // Soft Right
+};
 
+enum Pattern {
+  STOP,
+  FORWARD,
+  DEAD_END,
+  LEFT,
+  SOFT_LEFT,
+  RIGHT,
+  SOFT_RIGHT
+};
+
+Pattern CURRENTPATTERN = FORWARD;
 bool forward = true;
 
-const int speed = 50;
-const int turnSpeed = 50;
-const int reverseSpeed = 50;
+const int speed = 57;
+const int turnSpeed = 57;
+const int reverseSpeed = 57;
 
-const bool favorLeft = true;
+const bool favorLeft = false;
 
 const int forwardsDelay = 300;
 const int retryDuration = 40;
@@ -33,52 +46,48 @@ void setup() {
 }
 void loop() {
   SetDirection();
-  UpdateState();
+  ReadPattern();
+  PatternToAction();
 }
 
-int UpdateState() {
-  bool rotateAround = true;
-  bool leftFound = true;
-  bool rightFound = true;
-
-  bool stopFound = true;
-  bool forward = true;
-
-  bool softLeftFound = true;
-  bool softRightFound = true;
-
-  for(int i = 0; i < 5; i++) {
-    if(digitalRead(infraPins[i]) != forwardPattern[i])
-      forward = false;
-    if(digitalRead(infraPins[i]) != stopPattern[i])
-      stopFound = false;
-    if(digitalRead(infraPins[i]) != deadEndPattern[i])
-      rotateAround = false;
-    if(digitalRead(infraPins[i]) != leftPattern[i])
-      leftFound = false;
-    if(digitalRead(infraPins[i]) != rightPattern[i])
-      rightFound = false;
-    if(digitalRead(infraPins[i]) != softLeftPattern[i])
-      softLeftFound = false;
-    if(digitalRead(infraPins[i]) != softRightPattern[i])
-      softRightFound = false;
+void ReadPattern() {
+  for (int i = 0; i < 7; i++) {
+    bool patternMatch = true;
+    for (int j = 0; j < 5; j++) {
+      if (digitalRead(infraPins[j]) != patterns[i][j]) {
+        patternMatch = false;
+        break;
+      }
+    }
+    if (patternMatch) {
+      CURRENTPATTERN = static_cast<Pattern>(i);
+      return;
+    }
   }
-
-  if(forward)
-    Drive();
-  if(rotateAround)
-    RotateBack();
-  if(softLeftFound)
-    SoftLeft();
-  if(softRightFound)
-    SoftRight();
-  if(leftFound)
-    SteerLeft();
-  if(rightFound)
-    SteerRight();
-  if(stopFound)
-    TestEnd();
-  return 0;
+}
+void PatternToAction() {
+  switch(CURRENTPATTERN) {
+    case(STOP):
+      TestEnd();
+      break;
+    case(LEFT):
+      SteerLeft();
+      break;
+    case(SOFT_LEFT):
+      SoftLeft();
+      break;
+    case(RIGHT):
+      SteerRight();
+      break;
+    case(SOFT_RIGHT):
+      SoftRight();
+      break;
+    case(DEAD_END):
+      RotateBack();
+      break;
+    default:
+      Drive();
+  }
 }
 void Drive() {
   analogWrite(pwmPins[0], speed);
@@ -90,42 +99,24 @@ void Stop() {
 }
 void TurnUntilForward() {
   // turn until forward pattern is broken
-  bool keepSteering = true;
-  while(keepSteering) {
-    keepSteering = true;
-
-    for(int i = 0; i < 5; i++)
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        keepSteering = false;
-  }
-  delay(5);
-  while(keepSteering) {
-    keepSteering = true;
-
-    for(int i = 0; i < 5; i++)
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        keepSteering = false;
+  for(int i=0; i < 2; i++) { // needs to be detected twice to be sure
+    bool keepSteering = true;
+    while(keepSteering) {
+      ReadPattern();
+      keepSteering = CURRENTPATTERN == FORWARD;
+    }
+    delay(5);
   }
 
   // turn until new forward pattern is found
-  keepSteering = true;
-  while(keepSteering) {
-    keepSteering = false;
-
-    for(int i = 0; i < 5; i++)
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        keepSteering = true;
-  }
+  WaitUntilForward();
 }
 void WaitUntilForward() {
   // wait until forward pattern is found
   bool keepWaiting = true;
   while(keepWaiting) {
-    keepWaiting = false;
-
-    for(int i = 0; i < 5; i++)
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        keepWaiting = true;
+    ReadPattern();
+    keepWaiting = CURRENTPATTERN != FORWARD;
   }
 }
 void SteerLeftInPlace() {
@@ -148,36 +139,22 @@ void SteerRightInPlace() {
 }
 void SteerLeft() {
   delay(retryDuration);
-  bool patternPersisted = true;
-  for(int i=0; i<5; i++)
-    if(digitalRead(infraPins[i]) != leftPattern[i])
-      patternPersisted = false;
+  ReadPattern();
+  bool patternPersisted = CURRENTPATTERN == LEFT;
 
   if(!patternPersisted) {
-    bool stopFound = true;
-    for(int i=0; i<5; i++)
-      if(digitalRead(infraPins[i]) != stopPattern[i])
-        stopFound = false;
-
-    if(stopFound)
+    if(CURRENTPATTERN == STOP)
       TestEnd();
     return;
   }
 
   if(!favorLeft) {
     // TEST IF THERE'S FORWARD
-    bool forwardFound = true;
-    bool deadEndFound = true;
     Drive();
     delay(forwardsDelay);
 
-    for(int i=0; i < 5; i++) {
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        forwardFound = false;
-      if(digitalRead(infraPins[i]) != deadEndPattern[i])
-        deadEndFound = false;
-    }
-    if(forwardFound)
+    ReadPattern();
+    if(CURRENTPATTERN == FORWARD)
       return;
     SteerLeftInPlace();
     return;
@@ -193,37 +170,23 @@ void SoftLeft() {
 }
 void SteerRight() {
   delay(retryDuration);
-  bool patternPersisted = true;
-  for(int i=0; i<5; i++)
-    if(digitalRead(infraPins[i]) != rightPattern[i])
-      patternPersisted = false;
+
+  ReadPattern();
+  bool patternPersisted = CURRENTPATTERN == RIGHT;
 
   if(!patternPersisted) {
-    bool stopFound = true;
-    for(int i=0; i<5; i++)
-      if(digitalRead(infraPins[i]) != stopPattern[i])
-        stopFound = false;
-
-    if(stopFound)
+    if(CURRENTPATTERN == STOP)
       TestEnd();
     return;
   }
 
   if(favorLeft) {
     // TEST IF THERE'S FORWARD
-    bool forwardFound = true;
-    bool deadEndFound = true;
     Drive();
     delay(forwardsDelay);
 
-    for(int i=0; i < 5; i++) {
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        forwardFound = false;
-      if(digitalRead(infraPins[i]) != deadEndPattern[i])
-        deadEndFound = false;
-    }
-
-    if(forwardFound)
+    ReadPattern();
+    if(CURRENTPATTERN == FORWARD)
       return;
     SteerRightInPlace();
     return;
@@ -242,12 +205,8 @@ void TestEnd() {
   Drive();
   delay(forwardsDelay);
 
-  bool stopFound = true;
-  for(int i=0; i < 5; i++)
-    if(digitalRead(infraPins[i]) != stopPattern[i])
-      stopFound = false;
-
-  if(!stopFound) {
+  ReadPattern();
+  if(CURRENTPATTERN != STOP) {
     if(favorLeft)
       SteerLeftInPlace();
     if(!favorLeft)
@@ -259,13 +218,8 @@ void TestEnd() {
   Stop();
   bool stopped = true;
   while(stopped) {
-    bool temp = true;
-    for(int i=0; i < 5; i++)
-      if(digitalRead(infraPins[i]) != stopPattern[i])
-        temp = false;
-    
-    if(!temp)
-      stopped = false;
+    ReadPattern();
+    stopped = CURRENTPATTERN == STOP;
   }
 }
 void RotateBack() {
@@ -276,10 +230,8 @@ void RotateBack() {
 
   bool keepSteering = true;
   while(keepSteering) {
-    keepSteering = false;
-    for(int i = 0; i < 5; i++)
-      if(digitalRead(infraPins[i]) != forwardPattern[i])
-        keepSteering = true;
+    ReadPattern();
+    keepSteering = CURRENTPATTERN != FORWARD;
   }
   digitalWrite(dirPins[1], LOW);
 }
