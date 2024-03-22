@@ -25,9 +25,9 @@ enum Pattern {
 Pattern CURRENTPATTERN = FORWARD;
 bool forward = true;
 
-const int speed = 57;
-const int turnSpeed = 57;
-const int reverseSpeed = 57;
+const int speed = 70;
+const int turnSpeed = 70;
+const int reverseSpeed = 70;
 
 const bool favorLeft = false;
 
@@ -68,7 +68,7 @@ void ReadPattern() {
 void PatternToAction() {
   switch(CURRENTPATTERN) {
     case(STOP):
-      TestEnd();
+      TestFinish();
       break;
     case(LEFT):
       SteerLeft();
@@ -144,7 +144,7 @@ void SteerLeft() {
 
   if(!patternPersisted) {
     if(CURRENTPATTERN == STOP)
-      TestEnd();
+      TestFinish();
     return;
   }
 
@@ -176,7 +176,7 @@ void SteerRight() {
 
   if(!patternPersisted) {
     if(CURRENTPATTERN == STOP)
-      TestEnd();
+      TestFinish();
     return;
   }
 
@@ -201,7 +201,7 @@ void SoftRight() {
   analogWrite(pwmPins[1], turnSpeed * turnSpeedMultiplier);
 }
 
-void TestEnd() {
+void TestFinish() {
   Drive();
   delay(forwardsDelay);
 
