@@ -1,6 +1,35 @@
-int infraPins[] = {1,2,4,5,6};
-int pwmPins[] = {11,3};
-int dirPins[] = {12,13};
+const int maxDistance = 12;
+unsigned long startTime = 0;
+unsigned long endTime = 0;
+bool started = false;
+
+//display code
+const int segmentPins[7] = {14, 15, 16, 17, 18, 19, 0}; // A-G
+const int displayControlPins[2] = {8, 9}; // Display 1 and Display 2 control pins
+
+bool letters[4][7] = {
+  {HIGH, LOW, LOW, LOW, HIGH, HIGH, HIGH},    // F
+  {LOW, LOW, LOW, LOW, HIGH, HIGH, LOW},      // I
+  {HIGH, LOW, HIGH, HIGH, LOW, HIGH, HIGH},   // S
+  {LOW, LOW, LOW, HIGH, HIGH, HIGH, HIGH}     // T
+};
+bool numbers[10][7] = {
+  {HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, LOW},  // 0
+  {LOW, HIGH, HIGH, LOW, LOW, LOW, LOW},      // 1
+  {HIGH, HIGH, LOW, HIGH, HIGH, LOW, HIGH},   // 2
+  {HIGH, HIGH, HIGH, HIGH, LOW, LOW, HIGH},   // 3
+  {LOW, HIGH, HIGH, LOW, LOW, HIGH, HIGH},    // 4
+  {HIGH, LOW, HIGH, HIGH, LOW, HIGH, HIGH},   // 5
+  {HIGH, LOW, HIGH, HIGH, HIGH, HIGH, HIGH},  // 6
+  {HIGH, HIGH, HIGH, LOW, LOW, LOW, LOW},     // 7
+  {HIGH, HIGH, HIGH, HIGH, HIGH, HIGH, HIGH}, // 8
+  {HIGH, HIGH, HIGH, HIGH, LOW, HIGH, HIGH}   // 9
+};
+
+const int infraPins[] = {1,2,4,5,6};
+const int pwmPins[] = {11,3};
+const int dirPins[] = {12,13};
+const int ultraPins[] = {7,10}; // (trig pin , echo pin)
 
 const int patterns[][5] = {
   {0, 0, 0, 0, 0},   // Stop
@@ -28,29 +57,51 @@ bool forward = true;
 const int speed = 70;
 const int turnSpeed = 70;
 const int reverseSpeed = 70;
-
 const bool favorLeft = false;
-
-const int forwardsDelay = 300;
 const int retryDuration = 40;
-
+const int forwardsDelay = 300;
 const float turnSpeedMultiplier = 0.6;
 
 void setup() {
   TCCR2B = TCCR2B & B11111000 | B00000111;
 
+  for(int i = 0; i < 7; i++)
+    pinMode(segmentPins[i], OUTPUT);
+  for(int i = 0; i < 2; i++) {
+    pinMode(displayControlPins[i], OUTPUT);
+    digitalWrite(displayControlPins[i], HIGH);
+  }
+  pinMode(ultraPins[0], OUTPUT);
+  pinMode(ultraPins[1], INPUT);
+
   for(int dirPin : dirPins)
     pinMode(dirPin, OUTPUT);
   for(int pwmPin : pwmPins)
     pinMode(pwmPin, OUTPUT);
+  startTime = millis();
 }
 void loop() {
+  if(!started) {
+    if(millis() - startTime > 10000) {
+      // display ST
+      for(int i=0; i < 100; i++)
+        showLetters(2,3);
+
+      started = true;
+      startTime = millis();
+      return;
+    }
+    showNumber(10 - (millis() - startTime) / 1000);
+    return;
+  }
+  CheckForObstacle();
   SetDirection();
   ReadPattern();
   PatternToAction();
 }
 
 void ReadPattern() {
+  UpdateTimer();
   for (int i = 0; i < 7; i++) {
     bool patternMatch = true;
     for (int j = 0; j < 5; j++) {
@@ -89,6 +140,16 @@ void PatternToAction() {
       Drive();
   }
 }
+void CheckForObstacle() {
+  digitalWrite(ultraPins[0], HIGH);
+  delayMicroseconds(10);
+  digitalWrite(ultraPins[0], LOW);
+  float duration = pulseIn(ultraPins[1], HIGH);
+  float distance = duration / 58;
+
+  if(distance <= maxDistance)
+    RotateBack();
+}
 void Drive() {
   analogWrite(pwmPins[0], speed);
   analogWrite(pwmPins[1], speed);
@@ -108,11 +169,9 @@ void TurnUntilForward() {
     delay(5);
   }
 
-  // turn until new forward pattern is found
   WaitUntilForward();
 }
 void WaitUntilForward() {
-  // wait until forward pattern is found
   bool keepWaiting = true;
   while(keepWaiting) {
     ReadPattern();
@@ -149,7 +208,6 @@ void SteerLeft() {
   }
 
   if(!favorLeft) {
-    // TEST IF THERE'S FORWARD
     Drive();
     delay(forwardsDelay);
 
@@ -181,7 +239,6 @@ void SteerRight() {
   }
 
   if(favorLeft) {
-    // TEST IF THERE'S FORWARD
     Drive();
     delay(forwardsDelay);
 
@@ -214,11 +271,20 @@ void TestFinish() {
     return;
   }
 
-  // stop until pattern breaks
   Stop();
+  endTime = (millis() - startTime) / 1000;
+
+  // blink endTime;
+  for(int i=0; i < 3; i++) {
+    delay(500);
+    for(int j=0; j < 100; j++)
+      showNumber(endTime);
+  }
+      
+  // stop until pattern breaks
   bool stopped = true;
   while(stopped) {
-    ReadPattern();
+    showLetters(0,1);
     stopped = CURRENTPATTERN == STOP;
   }
 }
@@ -243,4 +309,44 @@ void SetDirection() {
     if(forward)
       digitalWrite(dirPin, LOW);
   }
+}
+
+void UpdateTimer() {
+  showNumber((millis() - startTime) / 1000);
+}
+void showNumber(int number) {
+  int tens = number / 10; // Calculate tens place
+  int ones = number % 10; // Calculate ones place
+
+  // Display the tens digit on the first display
+  for(int i = 0; i < 7; i++) {
+    digitalWrite(segmentPins[i], numbers[tens][i]);
+  }
+  digitalWrite(displayControlPins[0], LOW); // Enable the first display (assuming common cathode)
+  delay(5); // Short delay for the human eye to catch the display
+  digitalWrite(displayControlPins[0], HIGH); // Disable the first display
+
+  // Display the ones digit on the second display
+  for(int i = 0; i < 7; i++) {
+    digitalWrite(segmentPins[i], numbers[ones][i]);
+  }
+  digitalWrite(displayControlPins[1], LOW); // Enable the second display
+  delay(5); // Short delay
+  digitalWrite(displayControlPins[1], HIGH); // Disable the second display
+}
+void showLetters(int index, int index1) {
+  for(int i = 0; i < 7; i++) {
+    digitalWrite(segmentPins[i], letters[index][i]);
+  }
+  digitalWrite(displayControlPins[0], LOW); // Enable the first display (assuming common cathode)
+  delay(5); // Short delay for the human eye to catch the display
+  digitalWrite(displayControlPins[0], HIGH); // Disable the first display
+
+  // Display the ones digit on the second display
+  for(int i = 0; i < 7; i++) {
+    digitalWrite(segmentPins[i], letters[index1][i]);
+  }
+  digitalWrite(displayControlPins[1], LOW); // Enable the second display
+  delay(5); // Short delay
+  digitalWrite(displayControlPins[1], HIGH); // Disable the second display
 }
