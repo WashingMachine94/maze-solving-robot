@@ -54,7 +54,7 @@ const int speed = 80;
 const int turnSpeed = 80;
 const int reverseSpeed = 80;
 
-const int maxDistance = 15;
+const int maxDistance = 18;
 const bool favorLeft = false;
 const int retryDuration = 40;
 const int forwardsDelay = 300;
@@ -87,6 +87,7 @@ void loop() {
   SetDirection();
   ReadPattern();
   PatternToAction();
+  delay(5);
 }
 
 void ReadPattern() {
