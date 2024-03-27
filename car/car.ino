@@ -50,13 +50,13 @@ unsigned long endTime = 0;
 bool started = false;
 bool forward = true;
 
-const int speed = 80;
-const int turnSpeed = 80;
-const int reverseSpeed = 80;
+const int speed = 62;
+const int turnSpeed = 62;
+const int reverseSpeed = 62;
 
-const int maxDistance = 18;
+const int maxDistance = 20;
 const bool favorLeft = false;
-const int retryDuration = 40;
+const int retryDuration = 50;
 const int forwardsDelay = 300;
 const float turnSpeedMultiplier = 0.6;
 
@@ -87,7 +87,6 @@ void loop() {
   SetDirection();
   ReadPattern();
   PatternToAction();
-  delay(5);
 }
 
 void ReadPattern() {
@@ -173,6 +172,11 @@ void SteerLeftInPlace() {
   digitalWrite(dirPins[1], HIGH);
   analogWrite(pwmPins[0], turnSpeed);
   analogWrite(pwmPins[1], turnSpeed);
+  bool keepSteering = true;
+    while(keepSteering) {
+      ReadPattern();
+      keepSteering = CURRENTPATTERN == FORWARD;
+    }
   WaitUntilForward();
   forward = true;
   SetDirection();
@@ -182,6 +186,11 @@ void SteerRightInPlace() {
   digitalWrite(dirPins[1], LOW);
   analogWrite(pwmPins[0], turnSpeed);
   analogWrite(pwmPins[1], turnSpeed);
+  bool keepSteering = true;
+    while(keepSteering) {
+      ReadPattern();
+      keepSteering = CURRENTPATTERN == FORWARD;
+    }
   WaitUntilForward();
   forward = true;
   SetDirection();
